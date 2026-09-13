@@ -1,0 +1,28 @@
+version: 1
+extends: []
+project:
+  id: social-support-entrapment-gender-atlantico
+  title: "El género en la relación entre apoyo social y entrapment en adolescentes escolarizados del Atlántico"
+  description: >-
+    Apoyo social percibido y entrapment en el modelo Motivacional-Volitivo
+    Integrado (IMV), con el género como moderador, en adolescentes
+    escolarizados de municipios del departamento del Atlántico, Colombia.
+  authors:
+    - name: Natalia Alvarado
+    - name: Luis Cabarcas
+  keywords:
+    - entrapment
+    - apoyo social percibido
+    - moderación por género
+    - modelo Motivacional-Volitivo Integrado
+    - adolescentes escolarizados
+    - Colombia
+  toc:
+    - file: index.md
+    - file: notebooks/eda.ipynb
+site:
+  template: book-theme
+  title: Apoyo Social y Entrapment - Atlántico
+  options:
+    logo_text: Apoyo Social y Entrapment
+  nav: []

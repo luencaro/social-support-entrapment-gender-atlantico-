@@ -1,0 +1,33 @@
+{
+  "name": "Apoyo Social y Entrapment (R + MyST)",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "20"
+    }
+  },
+  "mounts": [
+    "source=social-support-entrapment-renv-cache,target=/root/.cache/R/renv,type=volume"
+  ],
+  "containerEnv": {
+    "R_LIBS_USER": "${containerWorkspaceFolder}/renv/library/R-4.3/x86_64-pc-linux-gnu"
+  },
+  "postCreateCommand": "Rscript -e \"renv::restore(prompt = FALSE)\" && Rscript -e \"IRkernel::installspec(name = 'ir', displayname = 'R', user = FALSE)\" && npm install -g mystmd",
+  "forwardPorts": [3000],
+  "portsAttributes": {
+    "3000": {
+      "label": "MyST book preview",
+      "onAutoForward": "notify"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-toolsai.jupyter",
+        "REditorSupport.r"
+      ]
+    }
+  }
+}
