@@ -19,15 +19,6 @@ efecto protector sobre el *entrapment*, y si el género modera dicha relación.
 Este book documenta el flujo de trabajo analítico del proyecto:
 
 - [Análisis Exploratorio de Datos (EDA)](notebooks/eda.ipynb): caracterización
-  descriptiva de la base de datos disponible (`data/df_moderation_2026.csv`),
+  descriptiva de la base de datos disponible,
   como primer paso hacia los modelos de moderación planteados en los
   objetivos específicos del proyecto.
-
-```{note}
-La base de datos maestra cruda del proyecto (con variables antropométricas e
-ítems psicométricos individuales) se procesa y documenta en un repositorio
-externo (OSF); este book trabaja sobre `df_moderation_2026.csv`, el conjunto
-de datos ya depurado y con puntajes latentes estimados (Familia, Amigos,
-Otras personas significativas, *Entrapment*) que se usará en los análisis de
-moderación.
-```

@@ -12,14 +12,20 @@
     "source=social-support-entrapment-renv-cache,target=/root/.cache/R/renv,type=volume"
   ],
   "containerEnv": {
-    "R_LIBS_USER": "${containerWorkspaceFolder}/renv/library/R-4.3/x86_64-pc-linux-gnu"
+    "R_LIBS_USER": "${containerWorkspaceFolder}/renv/library/R-4.3/x86_64-pc-linux-gnu",
+    "HOST": "0.0.0.0",
+    "SERVER_PORT": "3100"
   },
   "postCreateCommand": "Rscript -e \"renv::restore(prompt = FALSE)\" && Rscript -e \"IRkernel::installspec(name = 'ir', displayname = 'R', user = FALSE)\" && npm install -g mystmd",
-  "forwardPorts": [3000],
+  "forwardPorts": [3000, 3100],
   "portsAttributes": {
     "3000": {
       "label": "MyST book preview",
       "onAutoForward": "notify"
+    },
+    "3100": {
+      "label": "MyST content server (imágenes de notebooks)",
+      "onAutoForward": "silent"
     }
   },
   "customizations": {

@@ -17,18 +17,16 @@ renv.lock               Versiones exactas de los paquetes de R
 
 ## Entorno de desarrollo (Dev Container)
 
-El equipo trabaja en dos sistemas operativos distintos (Linux / Bluefin y
-Windows), así que en vez de instalar R, Node.js, Jupyter y `mystmd` a mano en
-cada máquina, el proyecto trae un [Dev Container](https://containers.dev/)
-([.devcontainer/](.devcontainer)) que arma ese entorno automáticamente e
-igual para los dos sistemas operativos.
+El proyecto trae un [Dev Container](https://containers.dev/)
+([.devcontainer/](.devcontainer)) que arma un entorno automáticamente e
+igual para diferentes sistemas operativos.
 
 **Requisitos previos:**
 
 1. [VS Code](https://code.visualstudio.com/) con la extensión
    [Dev Containers](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers).
 2. Un motor de contenedores corriendo: Docker Desktop en Windows, o Docker/Podman
-   en Linux (en Bluefin ya viene Docker instalado).
+   en Linux.
 
 **Pasos:**
 
@@ -58,20 +56,31 @@ install.packages("nombre_paquete")
 renv::snapshot()
 ```
 
-Commitea el `renv.lock` actualizado para que tu compañera lo reciba en su
-próximo rebuild del contenedor.
-
 ## Construir el book localmente
 
 Dentro del Dev Container (ya trae Node.js y `mystmd` instalados):
 
 ```bash
-myst start
+myst start --keep-host --server-port 3100
 ```
 
-Esto levanta un servidor local con recarga en caliente (VS Code reenvía el
-puerto 3000 automáticamente). Para generar el sitio estático (lo que hace el
-pipeline de CI):
+Esto levanta un servidor local con recarga en caliente (VS Code reenvía los
+puertos 3000 y 3100 automáticamente). El flag `--keep-host` es necesario
+porque, sin él, `myst start` sobrescribe la variable `HOST` a `localhost`,
+que en el Dev Container resuelve a IPv6 y hace que la página se quede
+cargando indefinidamente; `--keep-host` respeta el `HOST=0.0.0.0` ya
+definido en [devcontainer.json](.devcontainer/devcontainer.json).
+
+`myst start` en realidad levanta **dos** servidores: el del sitio (puerto
+3000) y un "content server" interno (puerto 3100) que sirve las imágenes
+generadas por los notebooks (gráficas de R). Si ese segundo puerto no está
+fijado y reenviado, las gráficas no cargan y solo se ve el texto alternativo
+`plot without title`. Por eso se fija con `--server-port 3100` (también vía
+`SERVER_PORT=3100` en [devcontainer.json](.devcontainer/devcontainer.json))
+y se agrega a `forwardPorts`.
+
+Para generar el sitio estático (lo que hace el pipeline de CI), que sirve
+todo desde un solo puerto y no tiene este problema:
 
 ```bash
 myst build --html
