@@ -42,10 +42,6 @@ igual para diferentes sistemas operativos.
 4. Abre un notebook, elige el kernel **R**, y ejecuta las celdas
    normalmente.
 
-Esto es válido igual en Linux que en Windows — ambos abren el mismo
-`devcontainer.json` y obtienen el mismo entorno, sin pasos manuales
-distintos por sistema operativo.
-
 ### Actualizar paquetes de R
 
 Si agregas una librería nueva al notebook, instálala dentro del Dev Container
@@ -63,24 +59,6 @@ Dentro del Dev Container (ya trae Node.js y `mystmd` instalados):
 ```bash
 myst start --keep-host --server-port 3100
 ```
-
-Esto levanta un servidor local con recarga en caliente (VS Code reenvía los
-puertos 3000 y 3100 automáticamente). El flag `--keep-host` es necesario
-porque, sin él, `myst start` sobrescribe la variable `HOST` a `localhost`,
-que en el Dev Container resuelve a IPv6 y hace que la página se quede
-cargando indefinidamente; `--keep-host` respeta el `HOST=0.0.0.0` ya
-definido en [devcontainer.json](.devcontainer/devcontainer.json).
-
-`myst start` en realidad levanta **dos** servidores: el del sitio (puerto
-3000) y un "content server" interno (puerto 3100) que sirve las imágenes
-generadas por los notebooks (gráficas de R). Si ese segundo puerto no está
-fijado y reenviado, las gráficas no cargan y solo se ve el texto alternativo
-`plot without title`. Por eso se fija con `--server-port 3100` (también vía
-`SERVER_PORT=3100` en [devcontainer.json](.devcontainer/devcontainer.json))
-y se agrega a `forwardPorts`.
-
-Para generar el sitio estático (lo que hace el pipeline de CI), que sirve
-todo desde un solo puerto y no tiene este problema:
 
 ```bash
 myst build --html
