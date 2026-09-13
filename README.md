@@ -39,7 +39,7 @@ igual para diferentes sistemas operativos.
    paquetes de R fijadas en [renv.lock](renv.lock), registra el kernel de
    Jupyter (`ir`) y instala `mystmd`. Las siguientes veces es casi instantáneo
    (la caché de `renv` se conserva en un volumen de Docker).
-4. Abre `notebooks/eda.ipynb`, elige el kernel **R**, y ejecuta las celdas
+4. Abre un notebook, elige el kernel **R**, y ejecuta las celdas
    normalmente.
 
 Esto es válido igual en Linux que en Windows — ambos abren el mismo

@@ -8,6 +8,9 @@ renv/python/
 renv/staging/
 renv/sandbox/
 
+# Variables de entorno locales (ruta de datos, credenciales, etc.)
+.Renviron
+
 # Jupyter
 .ipynb_checkpoints/
 */.ipynb_checkpoints/*

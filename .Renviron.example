@@ -1,0 +1,8 @@
+# Copia este archivo como .Renviron (en la raíz del proyecto) y ajusta la ruta
+# según donde tengas el archivo de datos en tu máquina.
+#
+# .Renviron NO se sube al repositorio (está en .gitignore), así que cada
+# desarrollador define su propia ruta sin exponerla en el historial de git.
+#
+# Ruta relativa a la raíz del proyecto:
+DATA_PATH=data/df_moderation_2026.csv
