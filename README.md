@@ -42,6 +42,22 @@ igual para diferentes sistemas operativos.
 4. Abre un notebook, elige el kernel **R**, y ejecuta las celdas
    normalmente.
 
+
+Si se ve errores al cargar
+paquetes o versiones que no se actualizan:
+
+1. Cierra VS Code y borra la caché de renv y la librería vieja:
+
+   ```bash
+   docker volume rm social-support-entrapment-renv-cache
+   ```
+
+   Y borra la carpeta local `renv/library/` (no está versionada, se regenera
+   sola).
+
+2. Reconstruye el contenedor desde cero:
+   `Dev Containers: Rebuild Container Without Cache`.
+
 ### Actualizar paquetes de R
 
 Si agregas una librería nueva al notebook, instálala dentro del Dev Container
