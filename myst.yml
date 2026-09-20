@@ -19,6 +19,7 @@ project:
     - Colombia
   toc:
     - file: index.md
+    - file: 00_descripcion_del_proyecto.md
     - file: notebooks/eda.ipynb
 site:
   template: book-theme
