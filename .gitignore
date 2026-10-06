@@ -32,3 +32,7 @@ Thumbs.db
 data/*
 !data/.gitkeep
 
+# Salidas derivadas de los datos (modelos y tablas); misma politica que data/
+outputs/**
+!outputs/**/
+!outputs/**/.gitkeep
