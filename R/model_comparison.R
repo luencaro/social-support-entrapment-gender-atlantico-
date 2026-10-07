@@ -9,12 +9,13 @@
 #   - indices de ajuste por modelo: R2, R2 ajustado, logLik, AIC y BIC;
 #   - comparaciones entre modelos anidados: delta R2, prueba F, f2 de Cohen,
 #     razon de verosimilitud (LRT), delta AIC / BIC y prueba de Wald del
-#     bloque con errores estandar robustos HC3.
+#     bloque con errores estandar robustos HC3 (sandwich + lmtest);
+#   - supuestos del modelo lineal de los 10 lm() y de elastic net (lmtest y
+#     performance).
 #
-# La matriz HC3 se calcula aqui directamente (vcov_hc3) para no agregar
-# sandwich/lmtest al lockfile.
-#
-# Requiere haber hecho source("R/config.R") antes.
+# Requiere haber hecho source("R/config.R") antes. Para los supuestos de
+# elastic net, tambien R/data_prep.R, R/moderation_pipeline.R y
+# R/elastic_net.R. sandwich, lmtest y performance se usan con prefijo.
 # ---------------------------------------------------------------------------
 
 suppressPackageStartupMessages({
@@ -114,33 +115,16 @@ fit_indices <- function(models) {
 # 4. Comparaciones anidadas
 # ===========================================================================
 
-#' Matriz de covarianza HC3 de los coeficientes de un lm.
-#'
-#' (X'X)^-1 X' diag(e_i^2 / (1 - h_i)^2) X (X'X)^-1, equivalente a
-#' sandwich::vcovHC(fit, type = "HC3").
-vcov_hc3 <- function(fit) {
-  X     <- model.matrix(fit)
-  e     <- residuals(fit)
-  h     <- hatvalues(fit)
-  bread <- chol2inv(qr.R(qr(X)))
-  meat  <- crossprod(X * (e / (1 - h)))
-  V <- bread %*% meat %*% bread
-  dimnames(V) <- list(colnames(X), colnames(X))
-  V
-}
-
-
 #' Prueba de Wald del bloque de terminos que el modelo completo agrega.
 #'
-#' Usa la covarianza HC3, de modo que no asume homocedasticidad. Se reporta
-#' como F = W / q con gl (q, gl residuales del modelo completo).
+#' Usa la covarianza HC3 (sandwich::vcovHC), de modo que no asume
+#' homocedasticidad. lmtest::waldtest la reporta como F = W / q con gl
+#' (q, gl residuales del modelo completo).
 wald_block_hc3 <- function(reduced, full) {
-  added <- setdiff(names(coef(full)), names(coef(reduced)))
-  b <- coef(full)[added]
-  V <- vcov_hc3(full)[added, added, drop = FALSE]
-  q <- length(added)
-  f <- as.numeric(t(b) %*% solve(V, b)) / q
-  tibble(f_hc3 = f, p_hc3 = pf(f, q, df.residual(full), lower.tail = FALSE))
+  w <- lmtest::waldtest(reduced, full,
+                        vcov = function(x) sandwich::vcovHC(x, type = "HC3"),
+                        test = "F")
+  tibble(f_hc3 = w$F[2], p_hc3 = w$`Pr(>F)`[2])
 }
 
 
@@ -205,72 +189,112 @@ compare_nested <- function(models, comparisons = build_comparisons()) {
 # 5. Supuestos del modelo lineal
 # ===========================================================================
 
-#' Prueba los supuestos del modelo lineal a partir de residuos y ajustados.
+#' VIF maximo por termino de un lm().
 #'
-#' Sirve igual para un lm() y para elastic net, porque solo usa los
-#' residuos, los valores ajustados y las columnas del modelo (sin intercepto).
-#' Las pruebas que necesitan predictores devuelven NA cuando el modelo no
-#' tiene columnas (M0).
-#'
-#'   - Normalidad: Shapiro-Wilk sobre los residuos.
-#'   - Homocedasticidad: Breusch-Pagan studentizado (Koenker), n x R2 de la
-#'     regresion de e^2 sobre las columnas, chi2 con p gl.
-#'   - Independencia: Durbin-Watson en el orden de las filas, con la
-#'     aproximacion asintotica DW ~ N(2, 4/n).
-#'   - Linealidad: RESET de Ramsey, prueba F de ajustado^2 y ajustado^3 en la
-#'     regresion auxiliar de los residuos sobre las columnas. En un lm() es
-#'     identica a la RESET clasica.
-#'   - Multicolinealidad: VIF maximo, diagonal de la inversa de la matriz de
-#'     correlaciones de las columnas.
-#'
-#' @param resid  residuos.
-#' @param fitted valores ajustados.
-#' @param X      matriz de columnas del modelo sin intercepto (puede tener 0).
-#' @return tibble de una fila con estadisticos y p-valores.
-check_assumptions <- function(resid, fitted, X) {
-  n <- length(resid)
-  p <- ncol(X)
+#' performance::check_collinearity da el VIF de cada termino; para un factor
+#' con varias dummies es el GVIF de Fox y Monette (un solo valor por factor).
+#' NA si el modelo tiene menos de dos terminos.
+max_vif <- function(fit) {
+  if (length(attr(terms(fit), "term.labels")) < 2) return(NA_real_)
+  cc <- suppressMessages(suppressWarnings(performance::check_collinearity(fit)))
+  max(cc$VIF)
+}
 
-  # Normalidad
-  sw <- shapiro.test(resid)
 
-  # Homocedasticidad (Breusch-Pagan de Koenker)
-  bp_stat <- bp_p <- NA_real_
-  if (p > 0) {
-    aux     <- lm(resid^2 ~ X)
-    bp_stat <- n * summary(aux)$r.squared
-    bp_p    <- pchisq(bp_stat, df = aux$rank - 1, lower.tail = FALSE)
-  }
-
-  # Independencia (Durbin-Watson, aproximacion normal)
-  dw   <- sum(diff(resid)^2) / sum(resid^2)
-  dw_p <- 2 * pnorm(-abs((dw - 2) / sqrt(4 / n)))
-
-  # Linealidad (RESET con potencias del ajustado estandarizado)
-  reset_f <- reset_p <- NA_real_
-  if (p > 0 && sd(fitted) > 0) {
-    z  <- as.numeric(scale(fitted))
-    m0 <- lm(resid ~ X)
-    m1 <- lm(resid ~ X + I(z^2) + I(z^3))
-    av <- anova(m0, m1)
-    reset_f <- av$F[2]
-    reset_p <- av$`Pr(>F)`[2]
-  }
-
-  # Multicolinealidad
-  vif_max <- if (p >= 2) max(diag(solve(cor(X)))) else NA_real_
-
-  tibble(
-    shapiro_w = unname(sw$statistic), shapiro_p = sw$p.value,
-    bp_stat   = bp_stat,              bp_p      = bp_p,
-    dw        = dw,                   dw_p      = dw_p,
-    reset_f   = reset_f,              reset_p   = reset_p,
+#' Fila de resultados de las pruebas de supuestos.
+assumption_row <- function(sw, bp, dw, reset_f, reset_p, vif_max) {
+  # Los nombres de las columnas coinciden con los de los argumentos (dw,
+  # reset_f...), asi que se extraen antes de construir la tabla.
+  values <- list(
+    shapiro_w = unname(sw$statistic),
+    shapiro_p = sw$p.value,
+    bp_stat   = if (is.null(bp)) NA_real_ else unname(bp$statistic),
+    bp_p      = if (is.null(bp)) NA_real_ else bp$p.value,
+    dw        = unname(dw$statistic),
+    dw_p      = dw$p.value,
+    reset_f   = reset_f,
+    reset_p   = reset_p,
     vif_max   = vif_max
+  )
+  as_tibble(values)
+}
+
+
+#' Supuestos del modelo lineal de un lm().
+#'
+#'   - Normalidad: shapiro.test sobre los residuos.
+#'   - Homocedasticidad: lmtest::bptest (Breusch-Pagan studentizado de
+#'     Koenker) sobre las columnas del modelo.
+#'   - Independencia: lmtest::dwtest bilateral, con p-valor exacto, en el
+#'     orden de las filas.
+#'   - Linealidad: lmtest::resettest con ajustado^2 y ajustado^3.
+#'   - Multicolinealidad: VIF (GVIF en factores) maximo, max_vif().
+#'
+#' En M0 (sin predictores) solo aplican normalidad e independencia.
+lm_assumptions <- function(fit) {
+  has_x <- ncol(model.matrix(fit)) > 1
+  rs    <- if (has_x) lmtest::resettest(fit, power = 2:3, type = "fitted")
+
+  assumption_row(
+    sw      = shapiro.test(residuals(fit)),
+    bp      = if (has_x) lmtest::bptest(fit),
+    dw      = lmtest::dwtest(fit, alternative = "two.sided"),
+    reset_f = if (has_x) unname(rs$statistic) else NA_real_,
+    reset_p = if (has_x) rs$p.value else NA_real_,
+    vif_max = max_vif(fit)
   )
 }
 
 
-#' Aplica check_assumptions() a los lm() y a elastic net.
+#' Supuestos del modelo lineal de elastic net.
+#'
+#' Elastic net no es un lm(), asi que las pruebas se aplican a sus residuos
+#' e = y - prediccion, con las columnas que selecciono:
+#'
+#'   - Normalidad: shapiro.test sobre e.
+#'   - Homocedasticidad: lmtest::bptest(e ~ 1, varformula = ~ columnas), el
+#'     Breusch-Pagan de Koenker sobre los residuos centrados.
+#'   - Independencia: lmtest::dwtest(e ~ 1), bilateral.
+#'   - Linealidad: no hay version de paquete para un modelo que no es lm():
+#'     se compara con anova() la regresion auxiliar de e sobre las columnas
+#'     con y sin ajustado^2 y ajustado^3 (ajustado estandarizado). En un lm()
+#'     esta prueba es identica a la RESET clasica.
+#'   - Multicolinealidad: max_vif() sobre esas columnas (el VIF solo depende
+#'     de las columnas, no de la respuesta).
+en_assumptions <- function(en_model, clean_data) {
+  data   <- apply_preprocessing(clean_data, en_model$params, en_model$coding)
+  fitted <- predict_en(en_model, clean_data)
+  X      <- build_en_design(data)$x[, en_model$selected, drop = FALSE]
+
+  d   <- as.data.frame(X)
+  names(d) <- make.names(colnames(X), unique = TRUE)
+  rhs <- names(d)
+  d$e <- data[[OUTCOME_VAR]] - fitted
+  d$z <- as.numeric(scale(fitted))
+
+  bp <- NULL
+  reset_f <- reset_p <- vif_max <- NA_real_
+  if (length(rhs) > 0) {
+    bp <- lmtest::bptest(e ~ 1, varformula = reformulate(rhs), data = d)
+    m0 <- lm(reformulate(rhs, response = "e"), data = d)
+    av <- anova(m0, update(m0, . ~ . + I(z^2) + I(z^3)))
+    reset_f <- av$F[2]
+    reset_p <- av$`Pr(>F)`[2]
+    vif_max <- max_vif(m0)
+  }
+
+  assumption_row(
+    sw      = shapiro.test(d$e),
+    bp      = bp,
+    dw      = lmtest::dwtest(e ~ 1, data = d, alternative = "two.sided"),
+    reset_f = reset_f,
+    reset_p = reset_p,
+    vif_max = vif_max
+  )
+}
+
+
+#' Aplica las pruebas de supuestos a los lm() y a elastic net.
 #'
 #' Cada prueba se marca como cumplida si p >= alpha (o VIF < vif_limit).
 #' all_met indica si el modelo cumple todas las pruebas que le aplican.
@@ -281,18 +305,10 @@ check_assumptions <- function(resid, fitted, X) {
 assumption_tests <- function(models, en_model = NULL, clean_data = NULL,
                              alpha   = ASSUMPTION_ALPHA,
                              vif_limit = ASSUMPTION_VIF_MAX) {
-  res <- imap_dfr(models, function(fit, nm) {
-    X <- model.matrix(fit)[, -1, drop = FALSE]
-    check_assumptions(residuals(fit), fitted(fit), X) %>%
-      mutate(model = nm, .before = 1)
-  })
+  res <- imap_dfr(models, ~ lm_assumptions(.x) %>% mutate(model = .y, .before = 1))
 
   if (!is.null(en_model)) {
-    data   <- apply_preprocessing(clean_data, en_model$params, en_model$coding)
-    X      <- build_en_design(data)$x[, en_model$selected, drop = FALSE]
-    fitted <- predict_en(en_model, clean_data)
-    res <- bind_rows(res,
-                     check_assumptions(data[[OUTCOME_VAR]] - fitted, fitted, X) %>%
+    res <- bind_rows(res, en_assumptions(en_model, clean_data) %>%
                        mutate(model = EN_MODEL_NAME, .before = 1))
   }
 
