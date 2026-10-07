@@ -11,11 +11,11 @@
 #     razon de verosimilitud (LRT), delta AIC / BIC y prueba de Wald del
 #     bloque con errores estandar robustos HC3 (sandwich + lmtest);
 #   - supuestos del modelo lineal de los 10 lm() y de elastic net (lmtest y
-#     performance).
+#     car).
 #
 # Requiere haber hecho source("R/config.R") antes. Para los supuestos de
 # elastic net, tambien R/data_prep.R, R/moderation_pipeline.R y
-# R/elastic_net.R. sandwich, lmtest y performance se usan con prefijo.
+# R/elastic_net.R. sandwich, lmtest y car se usan con prefijo.
 # ---------------------------------------------------------------------------
 
 suppressPackageStartupMessages({
@@ -189,15 +189,15 @@ compare_nested <- function(models, comparisons = build_comparisons()) {
 # 5. Supuestos del modelo lineal
 # ===========================================================================
 
-#' VIF maximo por termino de un lm().
+#' VIF maximo por predictor de un lm().
 #'
-#' performance::check_collinearity da el VIF de cada termino; para un factor
-#' con varias dummies es el GVIF de Fox y Monette (un solo valor por factor).
-#' NA si el modelo tiene menos de dos terminos.
+#' car::vif(type = "predictor") agrupa cada variable con las interacciones en
+#' que aparece y da un GVIF por variable. NA si el modelo tiene menos de dos
+#' terminos.
 max_vif <- function(fit) {
   if (length(attr(terms(fit), "term.labels")) < 2) return(NA_real_)
-  cc <- suppressMessages(suppressWarnings(performance::check_collinearity(fit)))
-  max(cc$VIF)
+  v <- suppressMessages(car::vif(fit, type = "predictor"))
+  max(if (is.matrix(v) || is.data.frame(v)) v[, "GVIF"] else v)
 }
 
 
@@ -228,7 +228,7 @@ assumption_row <- function(sw, bp, dw, reset_f, reset_p, vif_max) {
 #'   - Independencia: lmtest::dwtest bilateral, con p-valor exacto, en el
 #'     orden de las filas.
 #'   - Linealidad: lmtest::resettest con ajustado^2 y ajustado^3.
-#'   - Multicolinealidad: VIF (GVIF en factores) maximo, max_vif().
+#'   - Multicolinealidad: VIF maximo por predictor, max_vif().
 #'
 #' En M0 (sin predictores) solo aplican normalidad e independencia.
 lm_assumptions <- function(fit) {
