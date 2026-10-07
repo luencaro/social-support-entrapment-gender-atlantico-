@@ -1,6 +1,6 @@
 # Descripción del proyecto
 
-**Natalia Alvarado y Luis Cabarcas** · Septiembre 2026
+**Natalia Alvarado y Luis Cabarcas** · Octubre 2026
 
 ---
 

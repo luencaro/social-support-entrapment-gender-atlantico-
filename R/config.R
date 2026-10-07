@@ -20,6 +20,12 @@ PATH_FITTED_MODELS  <- "outputs/models/fitted_models.rds"
 PATH_FIT_MANIFEST   <- "outputs/models/fit_manifest.json"
 PATH_MODELS_SUMMARY <- "outputs/tables/models_summary.csv"
 PATH_COEFFICIENTS   <- "outputs/tables/coefficients_ols.csv"
+PATH_FIT_INDICES    <- "outputs/tables/fit_indices.csv"
+PATH_NESTED_TESTS   <- "outputs/tables/nested_tests.csv"
+PATH_ASSUMPTIONS    <- "outputs/tables/assumption_tests.csv"
+PATH_CV_FOLDS       <- "outputs/tables/cv_fold_metrics.csv"
+PATH_CV_SUMMARY     <- "outputs/tables/cv_summary.csv"
+PATH_EN_MODEL       <- "outputs/models/en_model.rds"
 
 
 ## --- Semilla ---------------------------------------------------------------
@@ -133,3 +139,47 @@ EXPECTED_N <- 530L
 # dejar la decision explicita y verificable, no para habilitar lo contrario.
 
 WINSORIZE_EXTREMES <- FALSE
+
+
+## --- Validacion cruzada ----------------------------------------------------
+# K-fold repetida, estratificada por genero para que cada fold conserve la
+# proporcion mujeres / hombres. El preprocesamiento que depende de los datos
+# (centrado y nivel de referencia "most_frequent") se aprende en cada fold de
+# entrenamiento y se aplica al de prueba.
+#
+# Regla de CV_SE_RULE errores estandar: se reportan los modelos cuyo RMSE
+# medio no supera min(RMSE) + CV_SE_RULE * EE del mejor. No se elige uno.
+
+CV_FOLDS      <- 10L
+CV_REPEATS    <- 20L
+CV_STRATA_VAR <- GENDER_VAR
+CV_SE_RULE    <- 1
+
+
+## --- Elastic net -----------------------------------------------------------
+# Modelo 11, junto a los 10 lm(). Se parte del diseno de EN_FULL_MODEL (todos
+# los terminos candidatos) y todas sus columnas se penalizan por igual:
+# genero, dummies de las covariables, dimensiones de apoyo e interacciones.
+#
+# alpha y lambda se eligen con una validacion cruzada interna de
+# EN_INNER_FOLDS folds (estratificada por CV_STRATA_VAR) sobre los datos con
+# que se ajusta: los 530 casos en el modelo final, o el fold de entrenamiento
+# dentro de la validacion cruzada externa. Regla de CV_SE_RULE EE: entre las
+# combinaciones (alpha, lambda) con RMSE dentro del umbral, la que deja menos
+# columnas distintas de cero.
+#
+# alpha = 0 (ridge) se excluye porque nunca deja coeficientes en cero.
+
+EN_MODEL_NAME   <- "ElasticNet"
+EN_FULL_MODEL   <- "M3_joint"
+EN_ALPHAS       <- c(0.1, 0.25, 0.5, 0.75, 1)
+EN_NLAMBDA      <- 100L
+EN_INNER_FOLDS  <- 10L
+
+
+## --- Supuestos del modelo lineal -------------------------------------------
+# Nivel de significancia de las pruebas de supuestos (Shapiro-Wilk,
+# Breusch-Pagan, Durbin-Watson, RESET) y VIF maximo tolerado.
+
+ASSUMPTION_ALPHA   <- 0.05
+ASSUMPTION_VIF_MAX <- 5

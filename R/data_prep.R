@@ -15,6 +15,11 @@
 #      modelado no vuelve a calcular ninguna media.
 #   7. Codifica el genero segun GENDER_CODING.
 #
+# Los pasos 1-4 (build_clean_sample) son fila a fila. Los pasos 5-6 dependen
+# de estadisticos de la muestra y se separan en learn_preprocessing() /
+# apply_preprocessing(), para que la validacion cruzada los aprenda solo con
+# cada fold de entrenamiento.
+#
 # No elimina ni winsoriza valores extremos: las escalas son puntajes latentes
 # acotados y un valor extremo es una respuesta valida.
 #
@@ -106,23 +111,19 @@ encode_gender <- function(x, coding = GENDER_CODING,
 }
 
 
-#' Lee la base cruda y construye la muestra analitica lista para modelar.
+#' Lee la base cruda y aplica la limpieza fila a fila (pasos 1-4).
 #'
-#' Pasos, en orden:
+#' Ningun paso depende de estadisticos de la muestra: cada fila se limpia o se
+#' descarta por su propio contenido. Por eso se puede aplicar una sola vez
+#' antes de partir los datos en folds.
+#'
 #'   1. "Missing" (y equivalentes) -> NA en las categoricas.
 #'   2. SSE colapsado a Low / Medium-High.
 #'   3. Listwise deletion pura sobre MODEL_VARS, sin imputacion, + droplevels().
 #'   4. Verificacion de que N == EXPECTED_N.
-#'   5. Niveles de referencia de Municipality, SSE y Ethnicity.
-#'   6. Centrado del apoyo por la gran media de la muestra analitica.
-#'   7. Codificacion de genero segun GENDER_CODING.
 #'
-#' No elimina ni winsoriza valores extremos: las escalas estan acotadas y un
-#' valor extremo es una respuesta valida.
-#'
-#' @return tibble con atributos "grand_means", "gender_coding" y "n_raw".
-build_analytic_sample <- function(path = PATH_RAW_DATA,
-                                  coding = GENDER_CODING) {
+#' @return tibble sin centrar ni codificar, con atributo "n_raw".
+build_clean_sample <- function(path = PATH_RAW_DATA) {
   raw <- read_csv(path, show_col_types = FALSE)
 
   missing_cols <- setdiff(c(MODEL_VARS, OUTCOME_SE_VAR), names(raw))
@@ -153,24 +154,84 @@ build_analytic_sample <- function(path = PATH_RAW_DATA,
   # Paso 4: el N tiene que ser el reportado por el tratamiento de datos.
   assert_expected_n(analytic)
 
-  # Paso 5: niveles de referencia.
-  for (v in names(REFERENCE_LEVELS)) {
-    ref <- resolve_reference_level(analytic[[v]], REFERENCE_LEVELS[[v]], v)
-    analytic[[v]] <- relevel(analytic[[v]], ref = ref)
+  attr(analytic, "n_raw") <- nrow(raw)
+  analytic
+}
+
+
+#' Aprende de una muestra los parametros de preprocesamiento (pasos 5-6).
+#'
+#' Son los unicos pasos que dependen de los datos: el nivel de referencia
+#' "most_frequent" y las grandes medias para centrar. En validacion cruzada se
+#' llama con el fold de entrenamiento y los parametros se aplican despues al
+#' fold de prueba con apply_preprocessing().
+#'
+#' @return lista con factor_levels, reference_levels y grand_means.
+learn_preprocessing <- function(train) {
+  list(
+    factor_levels    = map(set_names(CATEGORICAL_VARS),
+                           ~ levels(droplevels(factor(train[[.x]],
+                                                      levels = FACTOR_LEVELS[[.x]])))),
+    reference_levels = imap(REFERENCE_LEVELS,
+                            ~ resolve_reference_level(train[[.y]], .x, .y)),
+    grand_means      = map_dbl(set_names(SUPPORT_VARS), ~ mean(train[[.x]]))
+  )
+}
+
+
+#' Aplica parametros de preprocesamiento ya aprendidos (pasos 5-7).
+#'
+#'   5. Factores con los niveles y referencias de `params`.
+#'   6. Centrado del apoyo con las grandes medias de `params`.
+#'   7. Codificacion de genero segun `coding`.
+#'
+#' Se detiene si `data` trae un nivel que no aparecio al aprender `params`:
+#' lm() no podria predecir esas filas.
+#'
+#' @return tibble con atributos "grand_means" y "gender_coding".
+apply_preprocessing <- function(data, params, coding = GENDER_CODING) {
+  # Paso 5: niveles y referencias.
+  for (v in CATEGORICAL_VARS) {
+    x_chr  <- as.character(data[[v]])
+    nuevos <- setdiff(unique(x_chr[!is.na(x_chr)]), params$factor_levels[[v]])
+    if (length(nuevos) > 0) {
+      stop(sprintf("%s tiene niveles que no estaban al aprender el preprocesamiento: %s",
+                   v, paste(nuevos, collapse = ", ")), call. = FALSE)
+    }
+    data[[v]] <- factor(x_chr, levels = params$factor_levels[[v]])
+  }
+  for (v in names(params$reference_levels)) {
+    data[[v]] <- relevel(data[[v]], ref = params$reference_levels[[v]])
   }
 
-  # Paso 6: centrado por la gran media de la muestra analitica.
-  grand_means <- map_dbl(set_names(SUPPORT_VARS), ~ mean(analytic[[.x]]))
+  # Paso 6: centrado por las grandes medias aprendidas.
   for (v in SUPPORT_VARS) {
-    analytic[[paste0(v, CENTERED_SUFFIX)]] <- analytic[[v]] - grand_means[[v]]
+    data[[paste0(v, CENTERED_SUFFIX)]] <- data[[v]] - params$grand_means[[v]]
   }
 
   # Paso 7: codificacion de genero.
-  analytic[[GENDER_TERM]] <- encode_gender(analytic[[GENDER_VAR]], coding = coding)
+  data[[GENDER_TERM]] <- encode_gender(data[[GENDER_VAR]], coding = coding)
 
-  attr(analytic, "grand_means")   <- grand_means
-  attr(analytic, "gender_coding") <- coding
-  attr(analytic, "n_raw")         <- nrow(raw)
+  attr(data, "grand_means")   <- params$grand_means
+  attr(data, "gender_coding") <- coding
+  data
+}
+
+
+#' Lee la base cruda y construye la muestra analitica lista para modelar.
+#'
+#' Pasos 1-4 en build_clean_sample(); pasos 5-7 aprendidos y aplicados sobre
+#' la propia muestra analitica completa.
+#'
+#' No elimina ni winsoriza valores extremos: las escalas estan acotadas y un
+#' valor extremo es una respuesta valida.
+#'
+#' @return tibble con atributos "grand_means", "gender_coding" y "n_raw".
+build_analytic_sample <- function(path = PATH_RAW_DATA,
+                                  coding = GENDER_CODING) {
+  clean    <- build_clean_sample(path)
+  analytic <- apply_preprocessing(clean, learn_preprocessing(clean), coding = coding)
+  attr(analytic, "n_raw") <- attr(clean, "n_raw")
   analytic
 }
 
