@@ -20,7 +20,10 @@ project:
   toc:
     - file: index.md
     - file: 00_descripcion_del_proyecto.md
+    - file: 01_base_estadistica.md
     - file: notebooks/eda.ipynb
+    - file: notebooks/fit_models.ipynb
+    - file: notebooks/model_comparison.ipynb
 site:
   template: book-theme
   title: Apoyo Social y Entrapment - Atlántico

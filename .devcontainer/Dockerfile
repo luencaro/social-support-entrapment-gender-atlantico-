@@ -13,10 +13,11 @@ ENV RENV_VERSION=1.2.4
 ENV RENV_PATHS_LIBRARY=/opt/renv/library
 
 # Librerías de sistema para compilar tidyverse/gt (ragg, textshaping,
-# systemfonts, xml2, curl) y pandoc para las exportaciones de MyST.
+# systemfonts, xml2, curl), cmake para nloptr (dependencia de car), pandoc
+# para las exportaciones de MyST y openssh-client para usar git por SSH.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        curl pandoc python3-pip \
+        curl pandoc python3-pip cmake openssh-client \
         libcurl4-openssl-dev libssl-dev libxml2-dev libfontconfig1-dev \
         libharfbuzz-dev libfribidi-dev libfreetype6-dev libpng-dev \
         libtiff5-dev libjpeg-dev libwebp-dev libuv1-dev \

@@ -4,15 +4,44 @@ Book en [MyST](https://mystmd.org/) para el proyecto de Seminario Investigativo
 *"El género en la relación entre apoyo social y entrapment en adolescentes
 escolarizados de municipios del Atlántico"* (Natalia Alvarado y Luis Cabarcas).
 
+## Contexto
+
+El modelo Motivacional-Volitivo Integrado (IMV) estudia el apoyo social sobre
+todo como un moderador que amortigua la transición del *entrapment* (la
+sensación de no poder escapar) hacia la ideación suicida. Su posible papel
+sobre el propio *entrapment* está poco estudiado, y no se sabe si el género
+condiciona ese efecto.
+
+Este proyecto evalúa, en 680 adolescentes escolarizados (grados 9.º a 11.º) de
+municipios del Atlántico, Colombia, si el apoyo social percibido —familia,
+amigos y otras personas significativas— protege frente al *entrapment*, y si
+el género modera esa relación.
+
 ## Estructura
 
 ```
-.devcontainer/         Definición del entorno de desarrollo (Dev Container)
-data/                  Datos (df_moderation_2026.csv)
-notebooks/eda.ipynb    Análisis Exploratorio de Datos (kernel de R)
-index.md               Portada del book
-myst.yml               Configuración del proyecto/sitio MyST
-renv.lock               Versiones exactas de los paquetes de R
+.devcontainer/                     Entorno de desarrollo (Dev Container)
+.github/workflows/deploy.yml       Publicación del book en GitHub Pages
+index.md                           Portada del book
+00_descripcion_del_proyecto.md     Problema, antecedentes, justificación y objetivos
+01_base_estadistica.md             Matemática que usa el proyecto
+references.bib                     Bibliografía
+notebooks/
+  eda.ipynb                        Análisis Exploratorio de Datos
+  fit_models.ipynb                 Ajuste de los 10 modelos jerárquicos, elastic net
+                                   y validación cruzada
+  model_comparison.ipynb           Comparación de modelos y supuestos
+R/
+  config.R                         Decisiones del análisis (variables, rutas, parámetros)
+  data_prep.R                      Limpieza y preprocesamiento de la muestra analítica
+  moderation_pipeline.R            Fórmulas y ajuste de los modelos lineales
+  elastic_net.R                    Ajuste de elastic net (modelo 11)
+  cross_validation.R               Validación cruzada repetida
+  model_comparison.R               Índices de ajuste, pruebas anidadas y supuestos
+data/                              Datos (no se versionan)
+outputs/                           Modelos y tablas generados (no se versionan)
+myst.yml                           Configuración del proyecto/sitio MyST
+renv.lock                          Versiones exactas de los paquetes de R
 ```
 
 ## Entorno de desarrollo (Dev Container)
