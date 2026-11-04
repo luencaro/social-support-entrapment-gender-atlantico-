@@ -23,7 +23,8 @@
 # respuesta es 0/1), evaluada en las predicciones del elastic net.
 #
 # Requiere haber hecho source() de R/config.R, R/data_prep.R,
-# R/moderation_pipeline.R, R/cross_validation.R y R/elastic_net.R antes.
+# R/moderation_pipeline.R, R/cross_validation.R y R/elastic_net.R antes
+# (y R/imputed_pipeline.R para la version con imputacion multiple).
 # ---------------------------------------------------------------------------
 
 suppressPackageStartupMessages({
@@ -179,6 +180,128 @@ backward_en <- function(x, y, foldid, alphas = EN_ALPHAS, verbose = TRUE) {
 
   if (verbose) {
     motivo <- if (fit$n_zero == 0) "ningún coeficiente en cero"
+              else "quedan dos columnas"
+    cat(sprintf("Fin: %s.\n", motivo))
+  }
+
+  list(steps = bind_rows(steps), candidates = bind_rows(cands), fits = fits)
+}
+
+
+# ===========================================================================
+# 3. Eliminacion backward con imputacion multiple
+# ===========================================================================
+#
+# Misma idea que backward_en(), pero cada paso se ajusta en las m bases
+# imputadas (cada una elige su propio alpha y lambda desde cero) y se decide
+# con los promedios:
+#   - el AIC del modelo es el AIC medio entre bases;
+#   - una columna cuenta como "en cero" si su coeficiente es exactamente cero
+#     en al menos `zero_share` de las bases;
+#   - entre esas columnas sale la que deja el menor AIC medio al retirarla.
+# Todas las bases usan los mismos folds.
+
+#' Ajusta fit_en_step() con las columnas `vars` en cada base, en paralelo.
+#'
+#' @param designs lista de disenos (x, y), uno por base imputada.
+#' @return lista con vars, los ajustes por base, el AIC medio y la proporcion
+#'   de bases en que cada columna queda en cero.
+fit_en_step_mi <- function(designs, vars, foldid, alphas = EN_ALPHAS,
+                           cores = max(1L, parallel::detectCores() - 2L)) {
+  fits <- parallel::mclapply(designs, function(d) fit_en_step(d$x, d$y, vars, foldid, alphas),
+                             mc.cores = cores)
+  fallidas <- map_lgl(fits, inherits, "try-error")
+  if (any(fallidas)) {
+    stop(sprintf("El ajuste fallo en las bases: %s\n%s",
+                 paste(which(fallidas), collapse = ", "), fits[[which(fallidas)[1]]]),
+         call. = FALSE)
+  }
+
+  list(
+    vars       = vars,
+    fits       = fits,
+    aic        = mean(map_dbl(fits, "aic")),
+    zero_share = rowMeans(sapply(fits, function(f) f$coef[vars] == 0))
+  )
+}
+
+
+#' Fila del registro de un paso con imputacion multiple.
+#'
+#' alpha es el mas elegido entre bases y lambda la mediana; AIC, k, ceros por
+#' base y metricas de CV son promedios entre bases.
+step_row_mi <- function(step, fit, removed, zero_share) {
+  fits   <- fit$fits
+  alphas <- map_dbl(fits, "alpha")
+  zero   <- names(fit$zero_share)[fit$zero_share >= zero_share]
+
+  tibble(
+    step          = step,
+    n_vars        = length(fit$vars),
+    removed       = removed,
+    alpha         = as.numeric(names(which.max(table(alphas)))),
+    alpha_bases   = max(table(alphas)),
+    lambda        = median(map_dbl(fits, "lambda")),
+    aic           = fit$aic,
+    aic_sd        = sd(map_dbl(fits, "aic")),
+    k             = mean(map_dbl(fits, "k")),
+    n_zero        = length(zero),
+    n_zero_mean   = mean(map_dbl(fits, "n_zero")),
+    zero_vars     = paste(zero, collapse = " + "),
+    vars          = list(fit$vars),
+    zero_share_by = list(fit$zero_share)
+  ) %>%
+    bind_cols(map_dfr(fits, "metrics") %>% summarise(across(everything(), mean)))
+}
+
+
+#' Eliminacion backward con elastic net y AIC medio sobre bases imputadas.
+#'
+#' @param designs    lista de disenos (x, y), uno por base, con las mismas
+#'                   columnas.
+#' @param zero_share proporcion minima de bases con coeficiente cero para
+#'                   que una columna sea candidata a salir.
+#' @return lista con la tabla de pasos (steps), los candidatos evaluados
+#'   (candidates) y los ajustes de cada paso (fits).
+backward_en_mi <- function(designs, foldid, alphas = EN_ALPHAS, zero_share = 0.5,
+                           cores = max(1L, parallel::detectCores() - 2L),
+                           verbose = TRUE) {
+  cols <- colnames(designs[[1]]$x)
+  if (!all(map_lgl(designs, ~ identical(colnames(.x$x), cols)))) {
+    stop("Los disenos no tienen las mismas columnas en todas las bases.", call. = FALSE)
+  }
+
+  fit   <- fit_en_step_mi(designs, cols, foldid, alphas, cores)
+  fits  <- list(fit)
+  steps <- list(step_row_mi(0L, fit, NA_character_, zero_share))
+  cands <- list()
+  step  <- 0L
+  zero  <- names(fit$zero_share)[fit$zero_share >= zero_share]
+
+  while (length(zero) > 0 && length(fit$vars) > 2) {
+    step <- step + 1L
+
+    trials <- map(set_names(zero), ~ fit_en_step_mi(designs, setdiff(fit$vars, .x),
+                                                    foldid, alphas, cores))
+    cands[[step]] <- tibble(step = step, candidate = zero,
+                            zero_share = fit$zero_share[zero],
+                            aic = map_dbl(trials, "aic"))
+
+    out  <- zero[which.min(map_dbl(trials, "aic"))]
+    fit  <- trials[[out]]
+    fits[[step + 1L]]  <- fit
+    steps[[step + 1L]] <- step_row_mi(step, fit, out, zero_share)
+    zero <- names(fit$zero_share)[fit$zero_share >= zero_share]
+
+    if (verbose) {
+      cat(sprintf("Paso %2d: sale %-28s AIC medio = %8.2f  en cero = %d\n",
+                  step, out, fit$aic, length(zero)))
+    }
+  }
+
+  if (verbose) {
+    motivo <- if (length(zero) == 0)
+                sprintf("ninguna columna queda en cero en al menos %.0f %% de las bases", 100 * zero_share)
               else "quedan dos columnas"
     cat(sprintf("Fin: %s.\n", motivo))
   }

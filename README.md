@@ -31,7 +31,11 @@ notebooks/
   fit_models.ipynb                 Ajuste de los 10 modelos jerárquicos, elastic net
                                    y validación cruzada
   model_comparison.ipynb           Comparación de modelos y supuestos
+  imputacion.ipynb                 Datos faltantes e imputación múltiple (PMM)
+  imputed_pipeline.ipynb           Pipeline completo sobre las 20 bases imputadas
   backward_elastic_net.ipynb       Eliminación backward con elastic net y AIC
+  backward_elastic_net_imputed.ipynb
+                                   Lo mismo sobre las 20 bases imputadas (AIC medio)
 R/
   config.R                         Decisiones del análisis (variables, rutas, parámetros)
   data_prep.R                      Limpieza y preprocesamiento de la muestra analítica
@@ -40,6 +44,8 @@ R/
   cross_validation.R               Validación cruzada repetida
   model_comparison.R               Índices de ajuste, comparaciones anidadas, supuestos
                                    y diagnóstico de residuos
+  imputed_pipeline.R               Pipeline sobre las bases imputadas y combinación
+                                   de resultados (reglas de Rubin)
   backward_en.R                    Eliminación backward con elastic net y AIC
 data/                              Datos (no se versionan)
 outputs/                           Modelos y tablas generados (no se versionan)
