@@ -180,7 +180,9 @@ summarise_models <- function(models) {
 
 #' Tabla de coeficientes de los 10 modelos con EE OLS (no robusto).
 #'
-#' Los errores estandar HC3 se calculan en el pipeline posterior.
+#' Sin estadistico t ni p-valor: las pruebas sobre los coeficientes no se
+#' reportan porque los supuestos del modelo lineal no se cumplen (ver
+#' notebooks/model_comparison.ipynb).
 tidy_coefficients <- function(models) {
   imap_dfr(models, function(fit, nm) {
     tidy(fit) %>%
@@ -188,9 +190,7 @@ tidy_coefficients <- function(models) {
         model     = nm,
         term      = term,
         estimate  = estimate,
-        std_error = std.error,
-        statistic = statistic,
-        p_value   = p.value
+        std_error = std.error
       )
   })
 }

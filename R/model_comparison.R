@@ -7,15 +7,15 @@
 #
 # Alcance: cargar outputs/models/fitted_models.rds y reportar
 #   - indices de ajuste por modelo: R2, R2 ajustado, logLik, AIC y BIC;
-#   - comparaciones entre modelos anidados: delta R2, prueba F, f2 de Cohen,
-#     razon de verosimilitud (LRT), delta AIC / BIC y prueba de Wald del
-#     bloque con errores estandar robustos HC3 (sandwich + lmtest);
+#   - comparaciones entre modelos anidados: delta R2, f2 de Cohen y
+#     delta AIC / BIC (sin pruebas de hipotesis);
 #   - supuestos del modelo lineal de los 10 lm() y de elastic net (lmtest y
-#     car).
+#     car);
+#   - diagnostico por observacion: residuos, leverage, distancia de Cook.
 #
-# Requiere haber hecho source("R/config.R") antes. Para los supuestos de
-# elastic net, tambien R/data_prep.R, R/moderation_pipeline.R y
-# R/elastic_net.R. sandwich, lmtest y car se usan con prefijo.
+# Requiere haber hecho source("R/config.R") antes. Para los supuestos y el
+# diagnostico de elastic net, tambien R/data_prep.R, R/moderation_pipeline.R
+# y R/elastic_net.R. lmtest y car se usan con prefijo.
 # ---------------------------------------------------------------------------
 
 suppressPackageStartupMessages({
@@ -115,19 +115,6 @@ fit_indices <- function(models) {
 # 4. Comparaciones anidadas
 # ===========================================================================
 
-#' Prueba de Wald del bloque de terminos que el modelo completo agrega.
-#'
-#' Usa la covarianza HC3 (sandwich::vcovHC), de modo que no asume
-#' homocedasticidad. lmtest::waldtest la reporta como F = W / q con gl
-#' (q, gl residuales del modelo completo).
-wald_block_hc3 <- function(reduced, full) {
-  w <- lmtest::waldtest(reduced, full,
-                        vcov = function(x) sandwich::vcovHC(x, type = "HC3"),
-                        test = "F")
-  tibble(f_hc3 = w$F[2], p_hc3 = w$`Pr(>F)`[2])
-}
-
-
 #' Compara un par de modelos anidados.
 compare_pair <- function(reduced, full) {
   if (!all(names(coef(reduced)) %in% names(coef(full)))) {
@@ -136,33 +123,16 @@ compare_pair <- function(reduced, full) {
 
   r2_red  <- summary(reduced)$r.squared
   r2_full <- summary(full)$r.squared
-  ll_red  <- logLik(reduced)
-  ll_full <- logLik(full)
 
-  # Prueba F clasica (asume homocedasticidad).
-  av <- anova(reduced, full)
-
-  # Razon de verosimilitud.
-  lr    <- 2 * (as.numeric(ll_full) - as.numeric(ll_red))
-  df_lr <- attr(ll_full, "df") - attr(ll_red, "df")
-
-  bind_cols(
-    tibble(
-      df_added  = av$Df[2],
-      r2_reduced = r2_red,
-      r2_full   = r2_full,
-      delta_r2  = r2_full - r2_red,
-      # f2 de Cohen del bloque: delta R2 / (1 - R2 del completo).
-      cohen_f2  = (r2_full - r2_red) / (1 - r2_full),
-      f_stat    = av$F[2],
-      df_resid  = av$Res.Df[2],
-      p_f       = av$`Pr(>F)`[2],
-      lr_stat   = lr,
-      p_lr      = pchisq(lr, df_lr, lower.tail = FALSE),
-      delta_aic = AIC(full) - AIC(reduced),
-      delta_bic = BIC(full) - BIC(reduced)
-    ),
-    wald_block_hc3(reduced, full)
+  tibble(
+    df_added   = length(coef(full)) - length(coef(reduced)),
+    r2_reduced = r2_red,
+    r2_full    = r2_full,
+    delta_r2   = r2_full - r2_red,
+    # f2 de Cohen del bloque: delta R2 / (1 - R2 del completo).
+    cohen_f2   = (r2_full - r2_red) / (1 - r2_full),
+    delta_aic  = AIC(full) - AIC(reduced),
+    delta_bic  = BIC(full) - BIC(reduced)
   )
 }
 
@@ -327,12 +297,138 @@ assumption_tests <- function(models, en_model = NULL, clean_data = NULL,
 
 
 # ===========================================================================
-# 6. Guardado
+# 6. Diagnostico por observacion
+# ===========================================================================
+
+#' Residuos, leverage y distancia de Cook de cada observacion de un lm().
+#'
+#'   - std_resid:  residuo estandarizado interno, rstandard().
+#'   - stud_resid: residuo studentizado externo (sin la propia observacion),
+#'                 rstudent().
+#'   - leverage:   diagonal de la matriz sombrero, hatvalues().
+#'   - cooks_d:    distancia de Cook, cooks.distance().
+lm_diagnostics <- function(fit) {
+  tibble(
+    obs        = seq_len(nobs(fit)),
+    p          = length(coef(fit)),
+    fitted     = unname(fitted(fit)),
+    residual   = unname(residuals(fit)),
+    std_resid  = unname(rstandard(fit)),
+    stud_resid = unname(rstudent(fit)),
+    leverage   = unname(hatvalues(fit)),
+    cooks_d    = unname(cooks.distance(fit))
+  )
+}
+
+
+#' Residuos de elastic net.
+#'
+#' Elastic net no es un lm(): sus coeficientes estan encogidos y no tiene
+#' matriz sombrero, asi que leverage, residuo studentizado y distancia de
+#' Cook quedan en NA. std_resid es el residuo dividido por su desviacion
+#' estandar.
+en_diagnostics <- function(en_model, clean_data) {
+  data   <- apply_preprocessing(clean_data, en_model$params, en_model$coding)
+  fitted <- as.numeric(predict_en(en_model, clean_data))
+  e      <- data[[OUTCOME_VAR]] - fitted
+
+  tibble(
+    obs        = seq_along(e),
+    p          = NA_integer_,
+    fitted     = fitted,
+    residual   = e,
+    std_resid  = e / sd(e),
+    stud_resid = NA_real_,
+    leverage   = NA_real_,
+    cooks_d    = NA_real_
+  )
+}
+
+
+#' Diagnostico por observacion de los lm() y de elastic net.
+#'
+#' Marca cada observacion con los umbrales de config.R: leverage alto
+#' (h > k p / n), residuo studentizado grande (|t| > resid_limit) e
+#' influyente (Cook > 4 / n).
+model_diagnostics <- function(models, en_model = NULL, clean_data = NULL,
+                              leverage_k  = DIAG_LEVERAGE_K,
+                              resid_limit = DIAG_RESID_MAX) {
+  res <- imap_dfr(models, ~ lm_diagnostics(.x) %>% mutate(model = .y, .before = 1))
+
+  if (!is.null(en_model)) {
+    res <- bind_rows(res, en_diagnostics(en_model, clean_data) %>%
+                       mutate(model = EN_MODEL_NAME, .before = 1))
+  }
+
+  res %>%
+    group_by(model) %>%
+    mutate(n             = n(),
+           leverage_cut  = leverage_k * p / n,
+           cooks_cut     = 4 / n,
+           high_leverage = leverage > leverage_cut,
+           large_resid   = abs(stud_resid) > resid_limit,
+           influential   = cooks_d > cooks_cut) %>%
+    ungroup() %>%
+    mutate(model = factor(model, levels = unique(model)))
+}
+
+
+#' Resumen por modelo del diagnostico: forma de los residuos y conteo de
+#' observaciones marcadas.
+diagnostics_summary <- function(diag) {
+  diag %>%
+    group_by(model) %>%
+    summarise(
+      n               = first(n),
+      p               = first(p),
+      # Asimetria y curtosis en exceso de los residuos estandarizados
+      # (0 y 0 bajo normalidad).
+      skewness        = mean((std_resid - mean(std_resid))^3) / sd(std_resid)^3,
+      excess_kurtosis = mean((std_resid - mean(std_resid))^4) / sd(std_resid)^4 - 3,
+      leverage_cut    = first(leverage_cut),
+      max_leverage    = max(leverage),
+      n_high_leverage = sum(high_leverage),
+      n_large_resid   = sum(large_resid),
+      max_cooks       = max(cooks_d),
+      n_influential   = sum(influential),
+      n_lev_and_resid = sum(high_leverage & large_resid),
+      .groups = "drop"
+    )
+}
+
+
+#' Observaciones que resultan influyentes (Cook > 4 / n) en al menos
+#' min_models de los lm(), con sus valores en las variables del modelo.
+#'
+#' @param data muestra analitica con la que se ajustaron los lm(), en el
+#'             mismo orden de filas.
+influential_observations <- function(diag, data, min_models = 1) {
+  diag %>%
+    filter(!is.na(cooks_d)) %>%
+    group_by(obs) %>%
+    summarise(n_models   = sum(influential),
+              max_cooks  = max(cooks_d),
+              max_abs_t  = max(abs(stud_resid)),
+              max_lev    = max(leverage),
+              .groups = "drop") %>%
+    filter(n_models >= min_models) %>%
+    arrange(desc(n_models), desc(max_cooks)) %>%
+    left_join(data %>%
+                mutate(obs = row_number()) %>%
+                select(obs, all_of(c(OUTCOME_VAR, GENDER_VAR, SUPPORT_VARS))),
+              by = "obs")
+}
+
+
+# ===========================================================================
+# 7. Guardado
 # ===========================================================================
 
 #' Escribe las tablas de indices y comparaciones en outputs/tables/.
-save_comparison_outputs <- function(indices_tbl, nested_tbl, assumptions_tbl = NULL) {
-  walk(unique(dirname(c(PATH_FIT_INDICES, PATH_NESTED_TESTS, PATH_ASSUMPTIONS))),
+save_comparison_outputs <- function(indices_tbl, nested_tbl, assumptions_tbl = NULL,
+                                    diagnostics_tbl = NULL) {
+  walk(unique(dirname(c(PATH_FIT_INDICES, PATH_NESTED_TESTS, PATH_ASSUMPTIONS,
+                        PATH_DIAGNOSTICS))),
        ~ dir.create(.x, showWarnings = FALSE, recursive = TRUE))
 
   write_csv(indices_tbl, PATH_FIT_INDICES)
@@ -342,6 +438,11 @@ save_comparison_outputs <- function(indices_tbl, nested_tbl, assumptions_tbl = N
   if (!is.null(assumptions_tbl)) {
     write_csv(assumptions_tbl, PATH_ASSUMPTIONS)
     paths <- c(paths, PATH_ASSUMPTIONS)
+  }
+
+  if (!is.null(diagnostics_tbl)) {
+    write_csv(diagnostics_tbl, PATH_DIAGNOSTICS)
+    paths <- c(paths, PATH_DIAGNOSTICS)
   }
 
   invisible(paths)

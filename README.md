@@ -31,13 +31,16 @@ notebooks/
   fit_models.ipynb                 Ajuste de los 10 modelos jerárquicos, elastic net
                                    y validación cruzada
   model_comparison.ipynb           Comparación de modelos y supuestos
+  backward_elastic_net.ipynb       Eliminación backward con elastic net y AIC
 R/
   config.R                         Decisiones del análisis (variables, rutas, parámetros)
   data_prep.R                      Limpieza y preprocesamiento de la muestra analítica
   moderation_pipeline.R            Fórmulas y ajuste de los modelos lineales
   elastic_net.R                    Ajuste de elastic net (modelo 11)
   cross_validation.R               Validación cruzada repetida
-  model_comparison.R               Índices de ajuste, pruebas anidadas y supuestos
+  model_comparison.R               Índices de ajuste, comparaciones anidadas, supuestos
+                                   y diagnóstico de residuos
+  backward_en.R                    Eliminación backward con elastic net y AIC
 data/                              Datos (no se versionan)
 outputs/                           Modelos y tablas generados (no se versionan)
 myst.yml                           Configuración del proyecto/sitio MyST

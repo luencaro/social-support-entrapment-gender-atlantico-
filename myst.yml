@@ -24,6 +24,7 @@ project:
     - file: notebooks/eda.ipynb
     - file: notebooks/fit_models.ipynb
     - file: notebooks/model_comparison.ipynb
+    - file: notebooks/backward_elastic_net.ipynb
 site:
   template: book-theme
   title: Apoyo Social y Entrapment - Atlántico
