@@ -23,9 +23,11 @@ PATH_COEFFICIENTS   <- "outputs/tables/coefficients_ols.csv"
 PATH_FIT_INDICES    <- "outputs/tables/fit_indices.csv"
 PATH_NESTED_TESTS   <- "outputs/tables/nested_tests.csv"
 PATH_ASSUMPTIONS    <- "outputs/tables/assumption_tests.csv"
+PATH_DIAGNOSTICS    <- "outputs/tables/diagnostics_summary.csv"
 PATH_CV_FOLDS       <- "outputs/tables/cv_fold_metrics.csv"
 PATH_CV_SUMMARY     <- "outputs/tables/cv_summary.csv"
 PATH_EN_MODEL       <- "outputs/models/en_model.rds"
+PATH_BACKWARD_EN    <- "outputs/tables/backward_en_steps.csv"
 
 
 ## --- Semilla ---------------------------------------------------------------
@@ -183,3 +185,13 @@ EN_INNER_FOLDS  <- 10L
 
 ASSUMPTION_ALPHA   <- 0.05
 ASSUMPTION_VIF_MAX <- 5
+
+
+## --- Diagnostico de residuos e influencia -----------------------------------
+# Umbrales para marcar observaciones:
+#   - leverage alto:       h_ii > DIAG_LEVERAGE_K * p / n
+#   - residuo grande:      |residuo studentizado| > DIAG_RESID_MAX
+#   - influyente (Cook):   D_i > 4 / n
+
+DIAG_LEVERAGE_K <- 2
+DIAG_RESID_MAX  <- 3
