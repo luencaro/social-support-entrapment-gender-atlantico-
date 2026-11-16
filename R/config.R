@@ -29,6 +29,19 @@ PATH_CV_SUMMARY     <- "outputs/tables/cv_summary.csv"
 PATH_EN_MODEL       <- "outputs/models/en_model.rds"
 PATH_BACKWARD_EN    <- "outputs/tables/backward_en_steps.csv"
 
+# Imputacion multiple (notebooks/imputacion.ipynb) y pipeline sobre las bases
+# imputadas (notebooks/imputed_pipeline.ipynb).
+PATH_IMPUTED_DATA   <- "outputs/models/imputed_datasets.rds"
+PATH_MI_MODELS      <- "outputs/models/mi_pipeline.rds"
+PATH_MI_COEFS       <- "outputs/tables/mi_coefficients.csv"
+PATH_MI_INDICES     <- "outputs/tables/mi_fit_indices.csv"
+PATH_MI_NESTED      <- "outputs/tables/mi_nested.csv"
+PATH_MI_CV_FOLDS    <- "outputs/tables/mi_cv_fold_metrics.csv"
+PATH_MI_CV_SUMMARY  <- "outputs/tables/mi_cv_summary.csv"
+PATH_MI_ASSUMPTIONS <- "outputs/tables/mi_assumption_tests.csv"
+PATH_MI_DIAGNOSTICS <- "outputs/tables/mi_diagnostics_summary.csv"
+PATH_MI_BACKWARD_EN <- "outputs/tables/mi_backward_en_steps.csv"
+
 
 ## --- Semilla ---------------------------------------------------------------
 # Misma semilla que el EDA. lm() es determinista; se fija por consistencia con
