@@ -28,6 +28,7 @@ project:
     - file: notebooks/imputed_pipeline.ipynb
     - file: notebooks/backward_elastic_net.ipynb
     - file: notebooks/backward_elastic_net_imputed.ipynb
+    - file: notebooks/bootstrap_coeficientes.ipynb
 site:
   template: book-theme
   title: Apoyo Social y Entrapment - Atlántico

@@ -36,6 +36,8 @@ notebooks/
   backward_elastic_net.ipynb       Eliminación backward con elastic net y AIC
   backward_elastic_net_imputed.ipynb
                                    Lo mismo sobre las 20 bases imputadas (AIC medio)
+  bootstrap_coeficientes.ipynb     Bootstrap de los modelos finales del backward
+                                   (coeficientes y estabilidad de la selección)
 R/
   config.R                         Decisiones del análisis (variables, rutas, parámetros)
   data_prep.R                      Limpieza y preprocesamiento de la muestra analítica
